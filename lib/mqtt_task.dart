@@ -2,9 +2,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:mqtt_client/mqtt_client.dart';
 import 'package:mqtt_client/mqtt_server_client.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 
 class MqttTask extends StatefulWidget {
-  const MqttTask({super.key});
+  const MqttTask({Key? key}) : super(key: key);
 
   @override
   _MqttTaskState createState() => _MqttTaskState();
@@ -30,19 +31,20 @@ class _MqttTaskState extends State<MqttTask> {
   }
 
   void onDisconnected() {
+    Fluttertoast.showToast(msg: 'Disconnected');
     print('Disconnected');
   }
-
 
   void connectToBroker() async {
     try {
       await client.connect();
+      Fluttertoast.showToast(msg: 'Connected');
       print('Connected');
     } catch (e) {
+      Fluttertoast.showToast(msg: 'Connection failed: $e');
       print('Connection failed: $e');
     }
   }
-
 
   void subscribeToTopic() {
     if (client.connectionStatus?.state == MqttConnectionState.connected) {
@@ -55,8 +57,10 @@ class _MqttTaskState extends State<MqttTask> {
           publishedMessage = pt;
         });
       });
+      Fluttertoast.showToast(msg: 'Subscribed to topic');
     } else {
       if (kDebugMode) {
+        Fluttertoast.showToast(msg: 'Client is not connected.');
         print('Client is not connected.');
       }
     }
