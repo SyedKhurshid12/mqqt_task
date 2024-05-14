@@ -1,76 +1,31 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:mqtt_client/mqtt_client.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mqtt_client/mqtt_server_client.dart';
-import 'package:fluttertoast/fluttertoast.dart';
+import 'package:mqtt_task/bloc/mqtt_bloc/mqtt_bloc.dart';
+import 'package:mqtt_task/bloc/mqtt_bloc/mqtt_event.dart';
+import 'package:mqtt_task/bloc/mqtt_bloc/mqtt_state.dart';
 
-class MqttTask extends StatefulWidget {
-  const MqttTask({Key? key}) : super(key: key);
+class MqttTask extends StatelessWidget {
+   MqttTask({Key? key}) : super(key: key);
+
+  final TextEditingController _messageController = TextEditingController();
 
   @override
-  _MqttTaskState createState() => _MqttTaskState();
+  Widget build(BuildContext context) {
+    return BlocProvider(
+      create: (_) => MqttBloc(
+        MqttServerClient('test.mosquitto.org', 'mqtt_client_1'),
+        'sensors/temperature',
+      )..add(InitializeMqttClient()),
+      child: _MqttTaskView(messageController: _messageController),
+    );
+  }
 }
 
-class _MqttTaskState extends State<MqttTask> {
-  late MqttServerClient client;
+class _MqttTaskView extends StatelessWidget {
+  final TextEditingController messageController;
 
-  String clientId = 'mqtt_client_1';
-  int port = 1883;
-  String topic = 'sensors/temperature';
-  late String message;
-  String publishedMessage = "";
-
-  @override
-  void initState() {
-    super.initState();
-    client = MqttServerClient('test.mosquitto.org', clientId);
-    client.port = port;
-    client.logging(on: true);
-    client.keepAlivePeriod = 30;
-    client.onDisconnected = onDisconnected;
-  }
-
-  void onDisconnected() {
-    Fluttertoast.showToast(msg: 'Disconnected');
-    print('Disconnected');
-  }
-
-  void connectToBroker() async {
-    try {
-      await client.connect();
-      Fluttertoast.showToast(msg: 'Connected');
-      print('Connected');
-    } catch (e) {
-      Fluttertoast.showToast(msg: 'Connection failed: $e');
-      print('Connection failed: $e');
-    }
-  }
-
-  void subscribeToTopic() {
-    if (client.connectionStatus?.state == MqttConnectionState.connected) {
-      client.subscribe(topic, MqttQos.atLeastOnce);
-      client.updates?.listen((List<MqttReceivedMessage<MqttMessage>> c) {
-        final MqttPublishMessage recMess = c[0].payload as MqttPublishMessage;
-        final String pt =
-        MqttPublishPayload.bytesToStringAsString(recMess.payload.message);
-        setState(() {
-          publishedMessage = pt;
-        });
-      });
-      Fluttertoast.showToast(msg: 'Subscribed to topic');
-    } else {
-      if (kDebugMode) {
-        Fluttertoast.showToast(msg: 'Client is not connected.');
-        print('Client is not connected.');
-      }
-    }
-  }
-
-  void publishMessage() {
-    final builder = MqttClientPayloadBuilder();
-    builder.addString(message);
-    client.publishMessage(topic, MqttQos.exactlyOnce, builder.payload!);
-  }
+  const _MqttTaskView({Key? key, required this.messageController}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -85,30 +40,40 @@ class _MqttTaskState extends State<MqttTask> {
           children: <Widget>[
             const SizedBox(height: 10),
             ElevatedButton(
-              onPressed: connectToBroker,
+              onPressed: () =>
+                  context.read<MqttBloc>().add(ConnectToBroker()),
               child: const Text('Connect'),
             ),
             const SizedBox(height: 20),
             ElevatedButton(
-              onPressed: subscribeToTopic,
+              onPressed: () =>
+                  context.read<MqttBloc>().add(SubscribeToTopic()),
               child: const Text('Subscribe'),
             ),
             const SizedBox(height: 20),
             TextField(
               decoration: const InputDecoration(labelText: 'Message'),
+              controller: messageController,
               onChanged: (value) {
-                message = value;
               },
             ),
             const SizedBox(height: 10),
             ElevatedButton(
-              onPressed: publishMessage,
+              onPressed: () => context.read<MqttBloc>().add(PublishMessage(messageController.text.toString())),
               child: const Text('Publish'),
             ),
             const SizedBox(height: 20),
-            Text(
-              'Published Message: $publishedMessage',
-              style: const TextStyle(fontSize: 16),
+            BlocBuilder<MqttBloc, MqttState>(
+              builder: (context, state) {
+                if (state is MqttSubscribedState) {
+                  return Text(
+                    'Published Message: ${state.publishedMessage}',
+                    style: const TextStyle(fontSize: 16),
+                  );
+                } else {
+                  return Container();
+                }
+              },
             ),
           ],
         ),
